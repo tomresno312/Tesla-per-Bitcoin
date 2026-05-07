@@ -1,0 +1,265 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Tesla Shares per Bitcoin</title>
+<link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@700;900&family=DM+Sans:wght@300;400;500;700&display=swap" rel="stylesheet">
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+:root{--red:#e63946;--red-light:#ff7d8a;--red-dark:#a02832;--bg:#0a0a0f;--text:#e8e0d0;--dim:#7a7060}
+body{background:var(--bg);color:var(--text);font-family:'DM Sans',sans-serif;overflow:hidden;height:100vh}
+body::after{content:'';position:fixed;inset:0;z-index:9999;pointer-events:none;opacity:.04;
+  background-image:url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E")}
+.orb{position:fixed;border-radius:50%;filter:blur(120px);pointer-events:none}
+.orb-1{width:500px;height:500px;background:rgba(230,57,70,.10);top:-100px;right:-100px}
+.orb-2{width:600px;height:600px;background:rgba(230,57,70,.06);bottom:-200px;left:-150px}
+.container{max-width:1100px;margin:0 auto;padding:14px 24px;position:relative;z-index:1;height:100vh;display:flex;flex-direction:column}
+.hero{text-align:center;padding:10px 0 6px;display:flex;align-items:center;justify-content:center;gap:10px;flex-wrap:wrap}
+.hero-tag{font-size:10px;letter-spacing:3px;text-transform:uppercase;color:var(--dim)}
+.hero h1{font-family:'Playfair Display',serif;font-weight:900;font-size:clamp(1.3rem,3.5vw,1.9rem);line-height:1.2;
+  background:linear-gradient(135deg,var(--red-light),var(--red),var(--red-dark));
+  -webkit-background-clip:text;-webkit-text-fill-color:transparent}
+#live-dot{display:inline-block;width:7px;height:7px;background:#4ade80;border-radius:50%;box-shadow:0 0 6px #4ade80;opacity:0;transition:opacity .5s}
+.stats{display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin:10px 0 12px}
+.stat-card{background:linear-gradient(145deg,rgba(230,57,70,.07),rgba(255,255,255,.02));
+  border:1px solid rgba(230,57,70,.14);border-radius:12px;padding:12px 8px;text-align:center}
+.stat-label{font-size:9px;letter-spacing:2px;text-transform:uppercase;color:var(--dim);margin-bottom:3px}
+.stat-value{font-family:'Playfair Display',serif;font-size:1.3rem;font-weight:700;color:var(--red-light)}
+.stat-sub{font-size:10px;color:var(--dim);margin-top:2px}
+.chart-section{background:linear-gradient(160deg,rgba(230,57,70,.05),rgba(255,255,255,.01));
+  border:1px solid rgba(230,57,70,.12);border-radius:16px;padding:14px 20px 10px;flex:1;display:flex;flex-direction:column;min-height:0}
+.chart-header{display:flex;justify-content:space-between;align-items:center;gap:8px;margin-bottom:8px}
+.chart-title{font-family:'DM Sans',sans-serif;font-size:.95rem;font-weight:600;color:var(--text)}
+.status-msg{font-size:11px;color:var(--dim);margin-left:8px;font-weight:400}
+.chart-controls{display:flex;gap:5px}
+.chart-controls button{background:transparent;border:1px solid rgba(230,57,70,.22);color:var(--dim);
+  padding:5px 12px;border-radius:7px;font-family:'DM Sans',sans-serif;font-size:11px;cursor:pointer;transition:all .25s;letter-spacing:.5px}
+.chart-controls button:hover,.chart-controls button.active{background:rgba(230,57,70,.16);color:var(--red-light);border-color:var(--red)}
+.chart-wrap{position:relative;flex:1;min-height:0;display:flex;align-items:center;justify-content:center}
+#chart-canvas{width:100%;height:100%;display:block;cursor:crosshair}
+.tooltip{position:absolute;pointer-events:none;background:rgba(10,10,15,.92);border:1px solid rgba(230,57,70,.32);
+  border-radius:10px;padding:10px 14px;font-size:12px;color:var(--text);backdrop-filter:blur(12px);opacity:0;transition:opacity .15s;z-index:10;white-space:nowrap}
+.tooltip .tt-date{color:var(--dim);font-size:10px;margin-bottom:3px}
+.tooltip .tt-val{font-family:'Playfair Display',serif;font-size:1.1rem;color:var(--red-light)}
+.footer{text-align:center;padding:8px 0 4px;color:var(--dim);font-size:10px;letter-spacing:.5px}
+.footer span{color:var(--red)}
+.loading-spinner{width:24px;height:24px;border:2px solid rgba(230,57,70,.2);border-top-color:var(--red);border-radius:50%;animation:spin .8s linear infinite;margin:0 auto 10px}
+.error-msg{color:#e57373;font-size:13px;margin-top:8px;display:none}
+@keyframes spin{to{transform:rotate(360deg)}}
+@keyframes fadeDown{from{opacity:0;transform:translateY(12px)}to{opacity:1;transform:translateY(0)}}
+.hero,.stats,.chart-section{animation:fadeDown .7s ease both}
+.stats{animation-delay:.15s}.chart-section{animation-delay:.3s}
+@keyframes pulse{0%,100%{opacity:.4}50%{opacity:1}}
+.loading-text{color:var(--dim);font-size:13px;animation:pulse 1.5s ease-in-out infinite}
+</style>
+</head>
+<body>
+<div class="orb orb-1"></div><div class="orb orb-2"></div>
+<div class="container">
+  <div class="hero">
+    <span class="hero-tag">Crypto × Equity</span>
+    <h1>Tesla Shares per Bitcoin</h1>
+    <span id="live-dot"></span>
+  </div>
+  <div class="stats">
+    <div class="stat-card"><div class="stat-label">Current Ratio</div><div class="stat-value" id="stat-ratio">—</div><div class="stat-sub">TSLAX / BTC</div></div>
+    <div class="stat-card"><div class="stat-label">BTC Price</div><div class="stat-value" id="stat-btc">—</div><div class="stat-sub">USD</div></div>
+    <div class="stat-card"><div class="stat-label">TSLAX Price</div><div class="stat-value" id="stat-tslax">—</div><div class="stat-sub">USD / share</div></div>
+    <div class="stat-card"><div class="stat-label">All-Time High</div><div class="stat-value" id="stat-ath">—</div><div class="stat-sub">TSLAX / BTC</div></div>
+  </div>
+  <div class="chart-section">
+    <div class="chart-header">
+      <div class="chart-title">Historical Ratio<span class="status-msg" id="status"></span></div>
+      <div class="chart-controls">
+        <button data-range="1m">1M</button>
+        <button data-range="3m">3M</button>
+        <button data-range="all" class="active">ALL</button>
+      </div>
+    </div>
+    <div class="chart-wrap" id="chart-wrap">
+      <div id="loading-overlay" style="text-align:center">
+        <div class="loading-spinner"></div>
+        <div class="loading-text">Fetching live BTC & TSLAX data…</div>
+        <div class="error-msg" id="error-msg"></div>
+      </div>
+      <canvas id="chart-canvas" style="display:none"></canvas>
+      <div class="tooltip" id="tooltip"></div>
+    </div>
+  </div>
+  <div class="footer" id="footer">Prices via CryptoCompare (BTC + TSLAX) · <span>₿</span> + <span>TSLA</span></div>
+</div>
+<script>
+// CryptoCompare min-api — supports CORS from browsers
+const CC='https://min-api.cryptocompare.com/data';
+let data=[],currentData=[],W,H,retryCount=0;
+const canvas=document.getElementById('chart-canvas'),ctx=canvas.getContext('2d'),tooltip=document.getElementById('tooltip');
+const pad={t:16,r:16,b:32,l:50};
+
+function updateStats(){
+  if(!data.length)return;
+  const l=data[data.length-1],ath=Math.max(...data.map(d=>d.ratio));
+  document.getElementById('stat-ratio').textContent=l.ratio.toFixed(1);
+  document.getElementById('stat-btc').textContent='$'+Math.round(l.btc).toLocaleString();
+  document.getElementById('stat-tslax').textContent='$'+Math.round(l.tslax).toLocaleString();
+  document.getElementById('stat-ath').textContent=ath.toFixed(1);
+}
+
+// Fetch historical daily data from CryptoCompare.
+// TSLAX history is short (token launched 2025), so a single limit=2000 call covers everything.
+async function fetchHistorical(){
+  document.getElementById('status').textContent='loading…';
+  document.getElementById('error-msg').style.display='none';
+  try{
+    const [btcRes,tslaxRes]=await Promise.all([
+      fetch(`${CC}/v2/histoday?fsym=BTC&tsym=USD&limit=2000`).then(r=>r.json()),
+      fetch(`${CC}/v2/histoday?fsym=TSLAX&tsym=USD&limit=2000`).then(r=>r.json()),
+    ]);
+
+    const btcMap=new Map();
+    const tslaxMap=new Map();
+
+    if(btcRes?.Data?.Data) btcRes.Data.Data.forEach(d=>{if(d.close>0) btcMap.set(d.time,d.close)});
+    if(tslaxRes?.Data?.Data) tslaxRes.Data.Data.forEach(d=>{if(d.close>0) tslaxMap.set(d.time,d.close)});
+
+    if(tslaxMap.size===0) throw new Error('No TSLAX data returned');
+
+    // Anchor the merge to TSLAX timestamps (the limiting series).
+    // TSLAX trades 24/5 — carry forward last close to fill weekend gaps.
+    const tslaxTimes=[...tslaxMap.keys()].sort((a,b)=>a-b);
+    const startTs=tslaxTimes[0];
+    const merged=[];
+    let lastBtc=null,lastTslax=null;
+
+    // Walk from first TSLAX date to last BTC date, sampling every 3 days
+    const allTimes=[...new Set([...btcMap.keys(),...tslaxMap.keys()])].filter(t=>t>=startTs).sort((a,b)=>a-b);
+
+    allTimes.forEach((ts,i)=>{
+      if(btcMap.has(ts)) lastBtc=btcMap.get(ts);
+      if(tslaxMap.has(ts)) lastTslax=tslaxMap.get(ts);
+      if(!lastBtc||!lastTslax) return;
+      // Sample every 3 days for clean chart density
+      if(i%3!==0 && i!==allTimes.length-1) return;
+      const d=new Date(ts*1000);
+      const date=d.toISOString().slice(0,10);
+      const label=date.slice(5);  // MM-DD since range is short
+      merged.push({date,label,btc:lastBtc,tslax:lastTslax,ratio:+(lastBtc/lastTslax).toFixed(2)});
+    });
+
+    data=merged;
+    if(data.length>0){
+      document.getElementById('loading-overlay').style.display='none';
+      canvas.style.display='block';
+      document.getElementById('live-dot').style.opacity=1;
+      updateStats();applyRange();animateChart(currentData);
+      document.getElementById('status').textContent='';
+      setFooter();
+      retryCount=0;
+    } else {
+      throw new Error('No data returned');
+    }
+  }catch(e){
+    console.error('Historical fetch failed:',e);
+    retryCount++;
+    if(retryCount<=3){
+      document.getElementById('status').textContent='retrying ('+retryCount+'/3)…';
+      setTimeout(fetchHistorical,4000*retryCount);
+    } else {
+      document.getElementById('status').textContent='';
+      const errEl=document.getElementById('error-msg');
+      errEl.textContent='Failed to load data. CryptoCompare may not have TSLAX history available, or check network/ad-blocker and refresh.';
+      errEl.style.display='block';
+    }
+  }
+}
+
+// Live price refresh every 60s
+async function fetchLive(){
+  if(!data.length) return;
+  document.getElementById('status').textContent='updating…';
+  try{
+    const j=await fetch(`${CC}/pricemulti?fsyms=BTC,TSLAX&tsyms=USD`).then(r=>r.json());
+    const btc=j.BTC?.USD, tslax=j.TSLAX?.USD;
+    if(btc&&tslax){
+      const ratio=+(btc/tslax).toFixed(2);
+      const now=new Date();
+      const date=now.toISOString().slice(0,10);
+      const label=date.slice(5);
+      const last=data[data.length-1];
+      if(last.date===date) data[data.length-1]={date,label,btc,tslax,ratio};
+      else data.push({date,label,btc,tslax,ratio});
+      updateStats();applyRange();resize();draw(currentData);
+      const el=document.getElementById('stat-ratio');
+      el.style.transition='color .15s';el.style.color='#fff';setTimeout(()=>el.style.color='',400);
+      setFooter();
+    }
+  }catch(e){console.warn('Live fetch failed:',e)}
+  document.getElementById('status').textContent='';
+}
+
+function setFooter(){
+  document.getElementById('footer').innerHTML='Live · '+new Date().toLocaleTimeString()+' · <span style="color:#e63946">₿</span> + <span style="color:#e63946">TSLA</span>';
+}
+
+fetchHistorical().then(()=>{fetchLive();setInterval(fetchLive,60000)});
+
+// --- Chart ---
+function resize(){
+  const dpr=window.devicePixelRatio||1,rect=canvas.parentElement.getBoundingClientRect();
+  W=rect.width;H=rect.height;
+  canvas.width=W*dpr;canvas.height=H*dpr;
+  canvas.style.width=W+'px';canvas.style.height=H+'px';
+  ctx.setTransform(dpr,0,0,dpr,0,0);
+}
+function draw(pts,ap=1){
+  ctx.clearRect(0,0,W,H);if(!pts.length)return;
+  const maxR=Math.max(...pts.map(p=>p.ratio))*1.1,minR=Math.min(...pts.map(p=>p.ratio))*0.85;
+  const cW=W-pad.l-pad.r,cH=H-pad.t-pad.b,xs=cW/(pts.length-1||1);
+  const tx=i=>pad.l+i*xs,ty=r=>pad.t+cH-((r-minR)/(maxR-minR))*cH;
+  ctx.strokeStyle='rgba(230,57,70,.10)';ctx.lineWidth=1;
+  for(let i=0;i<=5;i++){const v=minR+(maxR-minR)*(i/5),y=ty(v);ctx.beginPath();ctx.moveTo(pad.l,y);ctx.lineTo(W-pad.r,y);ctx.stroke();
+    ctx.fillStyle='rgba(122,112,96,.6)';ctx.font='11px DM Sans,sans-serif';ctx.textAlign='right';ctx.fillText(v.toFixed(1),pad.l-8,y+4)}
+  ctx.fillStyle='rgba(122,112,96,.6)';ctx.font='10px DM Sans,sans-serif';ctx.textAlign='center';
+  const le=Math.max(1,Math.floor(pts.length/10));
+  pts.forEach((p,i)=>{if(i%le===0||i===pts.length-1)ctx.fillText(p.label,tx(i),H-pad.b+16)});
+  const dc=Math.floor(pts.length*ap);if(dc<2)return;
+  const gr=ctx.createLinearGradient(0,pad.t,0,H-pad.b);gr.addColorStop(0,'rgba(230,57,70,.22)');gr.addColorStop(1,'rgba(230,57,70,0)');
+  ctx.beginPath();ctx.moveTo(tx(0),ty(pts[0].ratio));for(let i=1;i<dc;i++)ctx.lineTo(tx(i),ty(pts[i].ratio));
+  ctx.lineTo(tx(dc-1),H-pad.b);ctx.lineTo(tx(0),H-pad.b);ctx.closePath();ctx.fillStyle=gr;ctx.fill();
+  ctx.beginPath();ctx.moveTo(tx(0),ty(pts[0].ratio));for(let i=1;i<dc;i++)ctx.lineTo(tx(i),ty(pts[i].ratio));
+  ctx.strokeStyle='#e63946';ctx.lineWidth=2.5;ctx.lineJoin='round';ctx.stroke();
+  const lx=tx(dc-1),ly=ty(pts[dc-1].ratio),gw=ctx.createRadialGradient(lx,ly,0,lx,ly,12);
+  gw.addColorStop(0,'rgba(255,125,138,.7)');gw.addColorStop(1,'rgba(230,57,70,0)');
+  ctx.fillStyle=gw;ctx.fillRect(lx-14,ly-14,28,28);
+  ctx.beginPath();ctx.arc(lx,ly,4,0,Math.PI*2);ctx.fillStyle='#ff7d8a';ctx.fill();
+}
+function animateChart(pts){const dur=1000,st=performance.now();(function f(t){const p=Math.min(1,(t-st)/dur);draw(pts,1-Math.pow(1-p,3));if(p<1)requestAnimationFrame(f)})(st)}
+function applyRange(){
+  const r=document.querySelector('.chart-controls button.active')?.dataset.range||'all';
+  if(r==='all'){currentData=data}
+  else{
+    const months=r==='1m'?1:3;
+    const cutoff=new Date();cutoff.setMonth(cutoff.getMonth()-months);
+    const cutStr=cutoff.toISOString().slice(0,10);
+    currentData=data.filter(d=>d.date>=cutStr);
+  }
+  resize();draw(currentData);
+}
+canvas.addEventListener('mousemove',e=>{
+  const rect=canvas.getBoundingClientRect(),mx=e.clientX-rect.left,cW=W-pad.l-pad.r;
+  const idx=Math.round(((mx-pad.l)/cW)*(currentData.length-1));
+  if(idx<0||idx>=currentData.length){tooltip.style.opacity=0;return}
+  const pt=currentData[idx];
+  tooltip.innerHTML=`<div class="tt-date">${pt.date}</div><div class="tt-val">${pt.ratio.toFixed(1)} TSLAX</div><div style="font-size:10px;color:#7a7060;margin-top:2px">BTC $${Math.round(pt.btc).toLocaleString()} · TSLAX $${Math.round(pt.tslax).toLocaleString()}</div>`;
+  tooltip.style.opacity=1;let ttx=e.clientX-rect.left+14,tty=e.clientY-rect.top-60;if(ttx+160>W)ttx-=180;
+  tooltip.style.left=ttx+'px';tooltip.style.top=tty+'px';
+});
+canvas.addEventListener('mouseleave',()=>tooltip.style.opacity=0);
+document.querySelectorAll('.chart-controls button').forEach(btn=>btn.addEventListener('click',()=>{
+  document.querySelectorAll('.chart-controls button').forEach(b=>b.classList.remove('active'));
+  btn.classList.add('active');applyRange();animateChart(currentData);
+}));
+window.addEventListener('resize',()=>{if(data.length){resize();draw(currentData)}});
+</script>
+</body>
+</html>
