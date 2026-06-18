@@ -58,15 +58,15 @@ body::after{content:'';position:fixed;inset:0;z-index:9999;pointer-events:none;o
 <div class="orb orb-1"></div><div class="orb orb-2"></div>
 <div class="container">
   <div class="hero">
-    <span class="hero-tag">Crypto × Equity</span>
+    <span class="hero-tag">Crypto Ã— Equity</span>
     <h1>Tesla Shares per Bitcoin</h1>
     <span id="live-dot"></span>
   </div>
   <div class="stats">
-    <div class="stat-card"><div class="stat-label">Current Ratio</div><div class="stat-value" id="stat-ratio">—</div><div class="stat-sub">TSLAX / BTC</div></div>
-    <div class="stat-card"><div class="stat-label">BTC Price</div><div class="stat-value" id="stat-btc">—</div><div class="stat-sub">USD</div></div>
-    <div class="stat-card"><div class="stat-label">TSLAX Price</div><div class="stat-value" id="stat-tslax">—</div><div class="stat-sub">USD / share</div></div>
-    <div class="stat-card"><div class="stat-label">All-Time High</div><div class="stat-value" id="stat-ath">—</div><div class="stat-sub">TSLAX / BTC</div></div>
+    <div class="stat-card"><div class="stat-label">Current Ratio</div><div class="stat-value" id="stat-ratio">â€”</div><div class="stat-sub">TSLAX / BTC</div></div>
+    <div class="stat-card"><div class="stat-label">BTC Price</div><div class="stat-value" id="stat-btc">â€”</div><div class="stat-sub">USD</div></div>
+    <div class="stat-card"><div class="stat-label">TSLAX Price</div><div class="stat-value" id="stat-tslax">â€”</div><div class="stat-sub">USD / share</div></div>
+    <div class="stat-card"><div class="stat-label">All-Time High</div><div class="stat-value" id="stat-ath">â€”</div><div class="stat-sub">TSLAX / BTC</div></div>
   </div>
   <div class="chart-section">
     <div class="chart-header">
@@ -80,18 +80,19 @@ body::after{content:'';position:fixed;inset:0;z-index:9999;pointer-events:none;o
     <div class="chart-wrap" id="chart-wrap">
       <div id="loading-overlay" style="text-align:center">
         <div class="loading-spinner"></div>
-        <div class="loading-text">Fetching live BTC & TSLAX data…</div>
+        <div class="loading-text">Fetching live BTC & TSLAX dataâ€¦</div>
         <div class="error-msg" id="error-msg"></div>
       </div>
       <canvas id="chart-canvas" style="display:none"></canvas>
       <div class="tooltip" id="tooltip"></div>
     </div>
   </div>
-  <div class="footer" id="footer">Prices via CryptoCompare (BTC + TSLAX) · <span>₿</span> + <span>TSLA</span></div>
+  <div class="footer" id="footer">Prices via CoinGecko (BTC + TSLAX) Â· <span>â‚¿</span> + <span>TSLA</span></div>
 </div>
 <script>
-// CryptoCompare min-api — supports CORS from browsers
-const CC='https://min-api.cryptocompare.com/data';
+// CoinGecko public API â€” no key required, supports CORS from browsers
+const CG='https://api.coingecko.com/api/v3';
+const BTC_ID='bitcoin', TSLAX_ID='tesla-xstock';
 let data=[],currentData=[],W,H,retryCount=0;
 const canvas=document.getElementById('chart-canvas'),ctx=canvas.getContext('2d'),tooltip=document.getElementById('tooltip');
 const pad={t:16,r:16,b:32,l:50};
@@ -105,43 +106,43 @@ function updateStats(){
   document.getElementById('stat-ath').textContent=ath.toFixed(1);
 }
 
-// Fetch historical daily data from CryptoCompare.
-// TSLAX history is short (token launched 2025), so a single limit=2000 call covers everything.
+// Fetch historical data from CoinGecko (max ~1yr of daily history on the free tier).
+// TSLAX history is short (token launched 2025), so a single days=365 call covers everything.
 async function fetchHistorical(){
-  document.getElementById('status').textContent='loading…';
+  document.getElementById('status').textContent='loadingâ€¦';
   document.getElementById('error-msg').style.display='none';
   try{
     const [btcRes,tslaxRes]=await Promise.all([
-      fetch(`${CC}/v2/histoday?fsym=BTC&tsym=USD&limit=2000`).then(r=>r.json()),
-      fetch(`${CC}/v2/histoday?fsym=TSLAX&tsym=USD&limit=2000`).then(r=>r.json()),
+      fetch(`${CG}/coins/${BTC_ID}/market_chart?vs_currency=usd&days=365`).then(r=>r.json()),
+      fetch(`${CG}/coins/${TSLAX_ID}/market_chart?vs_currency=usd&days=365`).then(r=>r.json()),
     ]);
 
-    const btcMap=new Map();
-    const tslaxMap=new Map();
-
-    if(btcRes?.Data?.Data) btcRes.Data.Data.forEach(d=>{if(d.close>0) btcMap.set(d.time,d.close)});
-    if(tslaxRes?.Data?.Data) tslaxRes.Data.Data.forEach(d=>{if(d.close>0) tslaxMap.set(d.time,d.close)});
+    // CoinGecko returns { prices:[[ts_ms, price], ...] }. Granularity may be intraday and the
+    // two series' timestamps don't align, so collapse each to one close per UTC day before merging.
+    const toDaily=res=>{
+      const m=new Map();
+      (res?.prices||[]).forEach(([ts,p])=>{if(p>0) m.set(new Date(ts).toISOString().slice(0,10),p)});
+      return m; // last sample of each day wins
+    };
+    const btcMap=toDaily(btcRes), tslaxMap=toDaily(tslaxRes);
 
     if(tslaxMap.size===0) throw new Error('No TSLAX data returned');
 
-    // Anchor the merge to TSLAX timestamps (the limiting series).
-    // TSLAX trades 24/5 — carry forward last close to fill weekend gaps.
-    const tslaxTimes=[...tslaxMap.keys()].sort((a,b)=>a-b);
-    const startTs=tslaxTimes[0];
+    // Anchor the merge to TSLAX's start (the limiting series).
+    // TSLAX trades 24/5 â€” carry forward last close to fill weekend gaps.
+    const startDay=[...tslaxMap.keys()].sort()[0];
     const merged=[];
     let lastBtc=null,lastTslax=null;
 
-    // Walk from first TSLAX date to last BTC date, sampling every 3 days
-    const allTimes=[...new Set([...btcMap.keys(),...tslaxMap.keys()])].filter(t=>t>=startTs).sort((a,b)=>a-b);
+    // Walk from first TSLAX date to last BTC date (ISO date strings sort chronologically), sampling every 3 days.
+    const allDays=[...new Set([...btcMap.keys(),...tslaxMap.keys()])].filter(d=>d>=startDay).sort();
 
-    allTimes.forEach((ts,i)=>{
-      if(btcMap.has(ts)) lastBtc=btcMap.get(ts);
-      if(tslaxMap.has(ts)) lastTslax=tslaxMap.get(ts);
+    allDays.forEach((date,i)=>{
+      if(btcMap.has(date)) lastBtc=btcMap.get(date);
+      if(tslaxMap.has(date)) lastTslax=tslaxMap.get(date);
       if(!lastBtc||!lastTslax) return;
       // Sample every 3 days for clean chart density
-      if(i%3!==0 && i!==allTimes.length-1) return;
-      const d=new Date(ts*1000);
-      const date=d.toISOString().slice(0,10);
+      if(i%3!==0 && i!==allDays.length-1) return;
       const label=date.slice(5);  // MM-DD since range is short
       merged.push({date,label,btc:lastBtc,tslax:lastTslax,ratio:+(lastBtc/lastTslax).toFixed(2)});
     });
@@ -162,12 +163,12 @@ async function fetchHistorical(){
     console.error('Historical fetch failed:',e);
     retryCount++;
     if(retryCount<=3){
-      document.getElementById('status').textContent='retrying ('+retryCount+'/3)…';
+      document.getElementById('status').textContent='retrying ('+retryCount+'/3)â€¦';
       setTimeout(fetchHistorical,4000*retryCount);
     } else {
       document.getElementById('status').textContent='';
       const errEl=document.getElementById('error-msg');
-      errEl.textContent='Failed to load data. CryptoCompare may not have TSLAX history available, or check network/ad-blocker and refresh.';
+      errEl.textContent='Failed to load data â€” CoinGecko may be rate-limiting the free tier. Wait a moment and refresh, or check network/ad-blocker.';
       errEl.style.display='block';
     }
   }
@@ -176,10 +177,10 @@ async function fetchHistorical(){
 // Live price refresh every 60s
 async function fetchLive(){
   if(!data.length) return;
-  document.getElementById('status').textContent='updating…';
+  document.getElementById('status').textContent='updatingâ€¦';
   try{
-    const j=await fetch(`${CC}/pricemulti?fsyms=BTC,TSLAX&tsyms=USD`).then(r=>r.json());
-    const btc=j.BTC?.USD, tslax=j.TSLAX?.USD;
+    const j=await fetch(`${CG}/simple/price?ids=${BTC_ID},${TSLAX_ID}&vs_currencies=usd`).then(r=>r.json());
+    const btc=j[BTC_ID]?.usd, tslax=j[TSLAX_ID]?.usd;
     if(btc&&tslax){
       const ratio=+(btc/tslax).toFixed(2);
       const now=new Date();
@@ -198,7 +199,7 @@ async function fetchLive(){
 }
 
 function setFooter(){
-  document.getElementById('footer').innerHTML='Live · '+new Date().toLocaleTimeString()+' · <span style="color:#e63946">₿</span> + <span style="color:#e63946">TSLA</span>';
+  document.getElementById('footer').innerHTML='Live Â· '+new Date().toLocaleTimeString()+' Â· <span style="color:#e63946">â‚¿</span> + <span style="color:#e63946">TSLA</span>';
 }
 
 fetchHistorical().then(()=>{fetchLive();setInterval(fetchLive,60000)});
@@ -250,7 +251,7 @@ canvas.addEventListener('mousemove',e=>{
   const idx=Math.round(((mx-pad.l)/cW)*(currentData.length-1));
   if(idx<0||idx>=currentData.length){tooltip.style.opacity=0;return}
   const pt=currentData[idx];
-  tooltip.innerHTML=`<div class="tt-date">${pt.date}</div><div class="tt-val">${pt.ratio.toFixed(1)} TSLAX</div><div style="font-size:10px;color:#7a7060;margin-top:2px">BTC $${Math.round(pt.btc).toLocaleString()} · TSLAX $${Math.round(pt.tslax).toLocaleString()}</div>`;
+  tooltip.innerHTML=`<div class="tt-date">${pt.date}</div><div class="tt-val">${pt.ratio.toFixed(1)} TSLAX</div><div style="font-size:10px;color:#7a7060;margin-top:2px">BTC $${Math.round(pt.btc).toLocaleString()} Â· TSLAX $${Math.round(pt.tslax).toLocaleString()}</div>`;
   tooltip.style.opacity=1;let ttx=e.clientX-rect.left+14,tty=e.clientY-rect.top-60;if(ttx+160>W)ttx-=180;
   tooltip.style.left=ttx+'px';tooltip.style.top=tty+'px';
 });
